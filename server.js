@@ -160,5 +160,27 @@ app.get("/api/catalog",(req,res)=>{
   res.json(pub);
 });
 
+// ── NUEVA RUTA: quota por dispositivo ──────────────────────────────────────
+app.get("/api/quota", async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId || req.ip;
+    const deviceHash = hashDevice(deviceId);
+    const { count } = await supabase
+      .from("diagnostics")
+      .select("*", { count: "exact", head: true })
+      .eq("device_hash", deviceHash)
+      .gte("created_at", today() + "T00:00:00");
+    const used = count || 0;
+    const remaining = Math.max(0, CFG.maxPerDevicePerDay - used);
+    const spend = await getSpendToday();
+    const paused = spend.spent_clp >= CFG.dailyBudgetCLP;
+    res.json({ used, remaining, total: CFG.maxPerDevicePerDay, paused });
+  } catch (err) {
+    console.error("quota_error:", err.message);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+// ──────────────────────────────────────────────────────────────────────────
+
 app.get("/health",(req,res)=>res.json({ok:true,service:"mira-backend"}));
 app.listen(CFG.port,()=>console.log(`MIRA backend en puerto ${CFG.port}`));
